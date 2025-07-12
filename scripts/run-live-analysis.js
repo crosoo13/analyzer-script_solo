@@ -1,6 +1,20 @@
-import { createClient } from '@supabase/supabase-js';
-import axios from 'axios';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+// --- НАЧАЛО БЛОКА ОТЛАДКИ (САМАЯ ПЕРВАЯ ВЕЩЬ В ФАЙЛЕ) ---
+// Это гарантирует, что мы увидим этот вывод, даже если есть проблемы с `require`.
+console.log("\n--- ОТЛАДКА v2: ПРОВЕРКА ВХОДНЫХ ДАННЫХ ---");
+console.log(`Аргумент --jobId получен: ${!!process.argv.find(a => a.startsWith('--jobId'))}`);
+console.log(`Аргумент --companyId получен: ${!!process.argv.find(a => a.startsWith('--companyId'))}`);
+console.log(`Секрет PROJECT_URL (для SUPABASE_URL) присутствует: ${!!process.env.SUPABASE_URL}`);
+console.log(`Секрет SERVICE_KEY (для SUPABASE_SERVICE_ROLE_KEY) присутствует: ${!!process.env.SUPABASE_SERVICE_ROLE_KEY}`);
+console.log(`Секрет GEMINI_API_KEY присутствует: ${!!process.env.GEMINI_API_KEY}`);
+console.log(`Секрет HH_USER_AGENT присутствует: ${!!process.env.HH_USER_AGENT}`);
+console.log("--- КОНЕЦ БЛОКА ОТЛАДКИ ---\n");
+// --- КОНЕЦ БЛОКА ОТЛАДКИ ---
+
+// ИЗМЕНЕНИЕ: Используем require вместо import
+const { createClient } = require('@supabase/supabase-js');
+const axios = require('axios');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+
 
 // --- A HELPER TO PARSE COMMAND LINE ARGUMENTS ---
 const getArg = (argName) => {
@@ -19,26 +33,10 @@ const {
     HH_USER_AGENT
 } = process.env;
 
-
-// --- НАЧАЛО БЛОКА ОТЛАДКИ ---
-// Этот блок кода выведет в лог GitHub Actions состояние всех критически важных переменных.
-// Он поможет точно понять, какой именно секрет не был передан в скрипт.
-console.log("\n--- ОТЛАДКА: ПРОВЕРКА ВХОДНЫХ ДАННЫХ ---");
-console.log(`Аргумент --jobId получен: ${!!JOB_ID} (значение: ${JOB_ID})`);
-console.log(`Аргумент --companyId получен: ${!!COMPANY_ID} (значение: ${COMPANY_ID})`);
-// Оператор !! превращает значение в true (если оно есть и не пустое) или false (если его нет).
-console.log(`Секрет PROJECT_URL (для SUPABASE_URL) присутствует: ${!!SUPABASE_URL}`);
-console.log(`Секрет SERVICE_KEY (для SUPABASE_SERVICE_ROLE_KEY) присутствует: ${!!SUPABASE_SERVICE_ROLE_KEY}`);
-console.log(`Секрет GEMINI_API_KEY присутствует: ${!!GEMINI_API_KEY}`);
-console.log(`Секрет HH_USER_AGENT присутствует: ${!!HH_USER_AGENT}`);
-console.log("--- КОНЕЦ БЛОКА ОТЛАДКИ ---\n");
-// --- КОНЕЦ БЛОКА ОТЛАДКИ ---
-
-
 if (!JOB_ID || !COMPANY_ID || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !GEMINI_API_KEY) {
     console.error("ОШИБКА: Не все обязательные переменные или аргументы были установлены. Скрипт будет остановлен.");
     console.error("Пожалуйста, проверьте лог отладки выше, чтобы увидеть, какое значение отсутствует (false).");
-    process.exit(1); // Завершаем выполнение с кодом ошибки
+    process.exit(1);
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -157,7 +155,7 @@ async function trackPositions(vacancies) {
         } catch (searchError) {
             console.error(`Search error for group "${representative.normalized_title}". Skipping.`);
         }
-        await sleep(500); // Pause between hh.ru API requests
+        await sleep(500);
     }
     return vacancies;
 }
