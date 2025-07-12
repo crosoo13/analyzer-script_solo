@@ -1,47 +1,57 @@
+# Имя вашего воркфлоу, которое будет отображаться в GitHub Actions
 name: Run Live Analysis On-Demand
 
-# 1. ИЗМЕНЕНИЕ: Триггер изменен на workflow_dispatch
-# Теперь воркфлоу будет запускаться только при прямом вызове через API
-# и будет принимать определенные входные данные (inputs).
+# Условия запуска: только вручную через интерфейс GitHub
 on:
   workflow_dispatch:
+    # Определяем входные данные (параметры), которые нужно будет указать при запуске
     inputs:
       job_id:
-        description: 'ID задачи из базы данных'
-        required: true
+        description: 'ID задачи (job_id) из базы данных'
+        required: true # Это поле обязательное
       company_id:
-        description: 'ID компании для анализа'
-        required: true
+        description: 'ID компании (company_id) для анализа'
+        required: true # Это поле тоже обязательное
 
+# Определяем задачи (jobs), которые будут выполняться
 jobs:
   run-analysis:
+    # На какой операционной системе будет работать задача
     runs-on: ubuntu-latest
+
+    # Шаги, которые будут выполнены последовательно
     steps:
-      # 1. Скачиваем код из репозитория
+      # Шаг 1: Скачиваем (клонируем) код вашего репозитория на виртуальную машину
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Устанавливаем Node.js
+      # Шаг 2: Устанавливаем Node.js нужной версии
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # Используем версию 18, как в вашем рабочем примере
+          node-version: '18'
+          # Включаем кэширование зависимостей для ускорения будущих запусков
+          cache: 'npm'
 
-      # 3. Устанавливаем зависимости
+      # Шаг 3: Устанавливаем все зависимости, перечисленные в файле package.json
       - name: Install dependencies
         run: npm install
 
-      # 4. Запускаем наш скрипт анализа
+      # Шаг 4: Запускаем наш скрипт анализа
       - name: Run Analysis Script
+        # Передаем секреты из настроек репозитория в переменные окружения для скрипта
         env:
-          # Передаем все секреты из GitHub в наш скрипт
+          # Здесь мы говорим:
+          # "Создай переменную SUPABASE_URL и возьми для нее значение из секрета с именем PROJECT_URL"
           SUPABASE_URL: ${{ secrets.PROJECT_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SERVICE_KEY }}
+          # "Создай переменную SUPABASE_SERVICE_KEY и возьми значение из секрета SERVICE_KEY"
+          SUPABASE_SERVICE_KEY: ${{ secrets.SERVICE_KEY }}
+          # Остальные секреты
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           HH_USER_AGENT: ${{ secrets.HH_USER_AGENT }}
+        # Команда для запуска. Символ `>` позволяет писать команду на нескольких строках
         run: >
-          # 2. ИЗМЕНЕНИЕ: Способ получения параметров
-          # Вместо client_payload используем inputs, как того требует workflow_dispatch.
           node scripts/run-live-analysis.js 
-          --jobId ${{ github.event.inputs.job_id }} 
-          --companyId ${{ github.event.inputs.company_id }}
+          --jobId=${{ github.event.inputs.job_id }} 
+          --companyId=${{ github.event.inputs.company_id }}
