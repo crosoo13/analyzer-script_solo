@@ -1,4 +1,4 @@
-// Используем синтаксис 'require', как в рабочем примере
+// Используем синтаксис 'require', который доказал свою работоспособность в вашем окружении
 const { createClient } = require('@supabase/supabase-js');
 const axios = require('axios');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
@@ -20,7 +20,7 @@ const COMPANY_ID = getArg('--companyId');
 // Получаем переменные окружения, переданные из GitHub Actions
 const {
     SUPABASE_URL,
-    SUPABASE_SERVICE_KEY, // Обратите внимание: без "ROLE"
+    SUPABASE_SERVICE_KEY,
     GEMINI_API_KEY,
     HH_USER_AGENT
 } = process.env;
@@ -28,13 +28,12 @@ const {
 // Критически важная проверка: если чего-то не хватает, скрипт не запустится
 if (!JOB_ID || !COMPANY_ID || !SUPABASE_URL || !SUPABASE_SERVICE_KEY || !GEMINI_API_KEY) {
     console.error("ОШИБКА: Не все обязательные переменные или аргументы были установлены. Выполнение остановлено.");
-    // Детально сообщаем, чего именно не хватает, для легкой отладки
     if (!JOB_ID) console.error("- Аргумент --jobId отсутствует.");
     if (!COMPANY_ID) console.error("- Аргумент --companyId отсутствует.");
-    if (!SUPABASE_URL) console.error("- Секрет SUPABASE_URL (из PROJECT_URL) отсутствует.");
-    if (!SUPABASE_SERVICE_KEY) console.error("- Секрет SUPABASE_SERVICE_KEY (из SERVICE_KEY) отсутствует.");
+    if (!SUPABASE_URL) console.error("- Секрет SUPABASE_URL отсутствует.");
+    if (!SUPABASE_SERVICE_KEY) console.error("- Секрет SUPABASE_SERVICE_KEY отсутствует.");
     if (!GEMINI_API_KEY) console.error("- Секрет GEMINI_API_KEY отсутствует.");
-    process.exit(1); // Завершаем с кодом ошибки, чтобы GitHub Action показал сбой
+    process.exit(1);
 }
 
 // Инициализация клиентов для работы с API
@@ -42,22 +41,16 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 const geminiModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 const HH_API_URL = 'https://api.hh.ru/vacancies';
-const USER_AGENT = HH_USER_AGENT || 'analyzer-script/1.0'; // Используем переданный User-Agent или запасной
+const USER_AGENT = HH_USER_AGENT || 'analyzer-script/1.0';
 
 // --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
 
-/**
- * Функция-пауза для задержки между запросами.
- * @param {number} ms - Время в миллисекундах.
- */
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 /**
  * Загружает все активные вакансии для одной компании с hh.ru.
- * @param {string} companyId - ID компании на hh.ru.
- * @returns {Promise<Array>} - Массив объектов вакансий.
  */
 async function fetchAllVacanciesForCompany(companyId) {
     const allVacancies = [];
@@ -69,7 +62,7 @@ async function fetchAllVacanciesForCompany(companyId) {
                 headers: { 'User-Agent': USER_AGENT },
             });
             const items = response.data.items;
-            if (items.length === 0) break; // Если вакансий больше нет, выходим из цикла
+            if (items.length === 0) break;
 
             const mappedItems = items.map(v => ({
                 hh_vacancy_id: parseInt(v.id),
@@ -80,12 +73,13 @@ async function fetchAllVacanciesForCompany(companyId) {
                 schedule_id: v.schedule.id,
                 url: v.alternate_url,
                 position: null,
-                competitors_count: null
+                competitors_count: null,
+                published_at: v.published_at // <-- КЛЮЧЕВОЕ ДОБАВЛЕНИЕ: ЗАБИРАЕМ ДАТУ ПУБЛИКАЦИИ
             }));
             allVacancies.push(...mappedItems);
 
             page++;
-            if (response.data.pages === page) break; // Если мы на последней странице, выходим
+            if (response.data.pages === page) break;
         } catch (error) {
             console.error(`Ошибка при получении вакансий для компании ${companyId}:`, error.message);
             throw new Error(`Не удалось получить вакансии с hh.ru: ${error.message}`);
@@ -96,7 +90,6 @@ async function fetchAllVacanciesForCompany(companyId) {
 
 /**
  * Отправляет "сырые" названия вакансий в Gemini для их нормализации.
- * @param {Array} vacancies - Массив вакансий.
  */
 async function normalizeTitlesForVacancies(vacancies) {
     const titlesToProcess = vacancies.map(v => ({ id: v.hh_vacancy_id, title: v.raw_title }));
@@ -105,13 +98,12 @@ async function normalizeTitlesForVacancies(vacancies) {
     try {
         const result = await geminiModel.generateContent(prompt);
         const text = result.response.text();
-        const jsonMatch = text.match(/\[[\s\S]*\]/); // Ищем JSON-массив в ответе
+        const jsonMatch = text.match(/\[[\s\S]*\]/);
         if (!jsonMatch) throw new Error("В ответе от Gemini не найден JSON-массив.");
 
         const normalizedDataArray = JSON.parse(jsonMatch[0]);
         const normalizedMap = new Map(normalizedDataArray.map(item => [parseInt(item.id), item.title]));
 
-        // Обновляем вакансии нормализованными названиями
         vacancies.forEach(v => {
             if (normalizedMap.has(v.hh_vacancy_id)) {
                 v.normalized_title = normalizedMap.get(v.hh_vacancy_id);
@@ -125,12 +117,9 @@ async function normalizeTitlesForVacancies(vacancies) {
 
 /**
  * Определяет позицию в поиске и число конкурентов для каждой вакансии.
- * @param {Array} vacancies - Массив вакансий с уже нормализованными названиями.
- * @returns {Promise<Array>} - Обновленный массив вакансий.
  */
 async function trackPositions(vacancies) {
     const groupedVacancies = new Map();
-    // Группируем вакансии по одинаковым поисковым запросам для оптимизации
     for (const vacancy of vacancies) {
         if (!vacancy.normalized_title) continue;
         const groupKey = `${vacancy.normalized_title}_${vacancy.area_id}_${vacancy.schedule_id}`;
@@ -157,7 +146,6 @@ async function trackPositions(vacancies) {
             const competitors_count = response.data.found;
             const positionMap = new Map(response.data.items.map((item, index) => [parseInt(item.id), index + 1]));
 
-            // Присваиваем результат всем вакансиям в группе
             for (const vacancy of vacancyGroup) {
                 vacancy.competitors_count = competitors_count;
                 vacancy.position = positionMap.get(vacancy.hh_vacancy_id) || 'Не найдено в топ 100';
@@ -165,7 +153,7 @@ async function trackPositions(vacancies) {
         } catch (searchError) {
             console.error(`Ошибка поиска для группы "${representative.normalized_title}". Пропускаем.`);
         }
-        await sleep(500); // Пауза между запросами, чтобы не перегружать API hh.ru
+        await sleep(500);
     }
     return vacancies;
 }
@@ -177,10 +165,8 @@ async function trackPositions(vacancies) {
 async function main() {
     console.log(`Запуск анализа для задачи ${JOB_ID}, компания ${COMPANY_ID}`);
     try {
-        // 1. Отмечаем в базе, что задача начала выполняться
         await supabase.from('live_analysis_jobs').update({ status: 'processing' }).eq('id', JOB_ID);
 
-        // 2. Выполняем анализ
         const vacancies = await fetchAllVacanciesForCompany(COMPANY_ID);
         if (vacancies.length > 0) {
             console.log(`Найдено ${vacancies.length} активных вакансий. Начинаю анализ...`);
@@ -190,25 +176,22 @@ async function main() {
             console.log("У компании нет активных вакансий. Анализ завершен.");
         }
 
-        // 3. Сохраняем результат в базу
         console.log("Анализ завершен. Сохранение результата...");
         const { error } = await supabase
             .from('live_analysis_jobs')
             .update({ status: 'completed', result_data: { vacancies }, completed_at: new Date().toISOString() })
             .eq('id', JOB_ID);
 
-        if (error) throw error; // Если ошибка при сохранении, она попадет в catch
+        if (error) throw error;
         console.log("Результат успешно сохранен!");
 
     } catch (error) {
-        // В случае любой критической ошибки на любом этапе...
         console.error("Критическая ошибка во время анализа:", error);
-        // ...обновляем статус задачи в базе на 'failed' и записываем текст ошибки
         await supabase
             .from('live_analysis_jobs')
             .update({ status: 'failed', error_message: error.message, completed_at: new Date().toISOString() })
             .eq('id', JOB_ID);
-        process.exit(1); // Завершаем с ошибкой
+        process.exit(1);
     }
 }
 
