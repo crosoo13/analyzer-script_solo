@@ -1,11 +1,17 @@
-# .github/workflows/live-analyzer.yml
-
 name: Run Live Analysis On-Demand
 
-# Этот "экшен" будет запускаться только по команде от нашего "диспетчера"
+# 1. ИЗМЕНЕНИЕ: Триггер изменен на workflow_dispatch
+# Теперь воркфлоу будет запускаться только при прямом вызове через API
+# и будет принимать определенные входные данные (inputs).
 on:
-  repository_dispatch:
-    types: [run-live-analysis]
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: 'ID задачи из базы данных'
+        required: true
+      company_id:
+        description: 'ID компании для анализа'
+        required: true
 
 jobs:
   run-analysis:
@@ -34,6 +40,8 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           HH_USER_AGENT: ${{ secrets.HH_USER_AGENT }}
         run: >
+          # 2. ИЗМЕНЕНИЕ: Способ получения параметров
+          # Вместо client_payload используем inputs, как того требует workflow_dispatch.
           node scripts/run-live-analysis.js 
-          --jobId ${{ github.event.client_payload.job_id }} 
-          --companyId ${{ github.event.client_payload.company_id }}
+          --jobId ${{ github.event.inputs.job_id }} 
+          --companyId ${{ github.event.inputs.company_id }}
