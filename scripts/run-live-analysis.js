@@ -19,11 +19,26 @@ const {
     HH_USER_AGENT
 } = process.env;
 
+
+// --- НАЧАЛО БЛОКА ОТЛАДКИ ---
+// Этот блок кода выведет в лог GitHub Actions состояние всех критически важных переменных.
+// Он поможет точно понять, какой именно секрет не был передан в скрипт.
+console.log("\n--- ОТЛАДКА: ПРОВЕРКА ВХОДНЫХ ДАННЫХ ---");
+console.log(`Аргумент --jobId получен: ${!!JOB_ID} (значение: ${JOB_ID})`);
+console.log(`Аргумент --companyId получен: ${!!COMPANY_ID} (значение: ${COMPANY_ID})`);
+// Оператор !! превращает значение в true (если оно есть и не пустое) или false (если его нет).
+console.log(`Секрет PROJECT_URL (для SUPABASE_URL) присутствует: ${!!SUPABASE_URL}`);
+console.log(`Секрет SERVICE_KEY (для SUPABASE_SERVICE_ROLE_KEY) присутствует: ${!!SUPABASE_SERVICE_ROLE_KEY}`);
+console.log(`Секрет GEMINI_API_KEY присутствует: ${!!GEMINI_API_KEY}`);
+console.log(`Секрет HH_USER_AGENT присутствует: ${!!HH_USER_AGENT}`);
+console.log("--- КОНЕЦ БЛОКА ОТЛАДКИ ---\n");
+// --- КОНЕЦ БЛОКА ОТЛАДКИ ---
+
+
 if (!JOB_ID || !COMPANY_ID || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !GEMINI_API_KEY) {
-    console.error("Error: Not all required environment variables or arguments are set.");
-    console.log("JOB_ID:", JOB_ID);
-    console.log("COMPANY_ID:", COMPANY_ID);
-    process.exit(1);
+    console.error("ОШИБКА: Не все обязательные переменные или аргументы были установлены. Скрипт будет остановлен.");
+    console.error("Пожалуйста, проверьте лог отладки выше, чтобы увидеть, какое значение отсутствует (false).");
+    process.exit(1); // Завершаем выполнение с кодом ошибки
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -152,17 +167,14 @@ async function trackPositions(vacancies) {
 async function main() {
     console.log(`Starting analysis for job ${JOB_ID}, company ${COMPANY_ID}`);
     try {
-        // Update job status to "processing"
         await supabase.from('live_analysis_jobs').update({ status: 'processing' }).eq('id', JOB_ID);
 
-        // --- Perform the analysis ---
         const vacancies = await fetchAllVacanciesForCompany(COMPANY_ID);
         if (vacancies.length > 0) {
             await normalizeTitlesForVacancies(vacancies);
             await trackPositions(vacancies);
         }
 
-        // --- Save the result to the database ---
         console.log("Analysis complete. Saving result...");
         const { error } = await supabase
             .from('live_analysis_jobs')
@@ -178,7 +190,6 @@ async function main() {
 
     } catch (error) {
         console.error("A critical error occurred during the analysis:", error);
-        // On failure, update the job in the database with the error message
         await supabase
             .from('live_analysis_jobs')
             .update({
@@ -187,7 +198,7 @@ async function main() {
                 completed_at: new Date().toISOString()
             })
             .eq('id', JOB_ID);
-        process.exit(1); // Exit with an error code to fail the GitHub Action
+        process.exit(1);
     }
 }
 
