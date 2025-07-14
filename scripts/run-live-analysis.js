@@ -39,7 +39,7 @@ if (!JOB_ID || !COMPANY_ID || !SUPABASE_URL || !SUPABASE_SERVICE_KEY || !GEMINI_
 // Инициализация клиентов для работы с API
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-const geminiModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+const geminiModel = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
 const HH_API_URL = 'https://api.hh.ru/vacancies';
 const USER_AGENT = HH_USER_AGENT || 'analyzer-script/1.0';
 
