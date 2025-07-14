@@ -74,7 +74,12 @@ async function fetchAllVacanciesForCompany(companyId) {
                 url: v.alternate_url,
                 position: null,
                 competitors_count: null,
-                published_at: v.published_at // <-- КЛЮЧЕВОЕ ДОБАВЛЕНИЕ: ЗАБИРАЕМ ДАТУ ПУБЛИКАЦИИ
+                published_at: v.published_at,
+                // --- ДОБАВЛЕНЫ ПОЛЯ ЗАРПЛАТЫ ---
+                salary_from: v.salary ? v.salary.from : null,
+                salary_to: v.salary ? v.salary.to : null,
+                salary_currency: v.salary ? v.salary.currency : null,
+                salary_gross: v.salary ? v.salary.gross : null,
             }));
             allVacancies.push(...mappedItems);
 
